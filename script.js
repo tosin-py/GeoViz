@@ -1,6 +1,6 @@
 /*
  * Geophysical Data Plotter Logic
- * Author: Oseni Ridwan, Email: olainmotion@gmail.com
+ * Author: Oseni Ridwan, Email: oddbrushstudio@gmail.com
  * Description: Handles data parsing, apparent resistivity calculation, 
  * Karous-Hjelt filtering, and plotting using Chart.js.
  */
@@ -8,6 +8,24 @@
 // Global variables
 let chart = null;
 let currentDataType = 'vlf';
+let chartAnnotationPluginLoaded = false; // Flag to track plugin load status
+
+// --- Color Themes (New Feature) ---
+// Define aesthetically pleasing color pairs (start color / end color) for gradients
+const VLF_THEMES = {
+    "ocean": { name: "Ocean (Blue/Orange)", p1: '#00b4d8', p2: '#fca311', text: 'Blue / Orange' },
+    "earth": { name: "Earth (Yellow/Green)", p1: '#90be6d', p2: '#f9c74f', text: 'Green / Yellow' },
+    "classic": { name: "Classic (Blue/Red)", p1: '#1e90ff', p2: '#dc143c', text: 'Blue / Red' },
+};
+
+// Define color palettes for multi-line resistivity plots (3 main colors)
+// Each array represents a palette for plotting multiple 'a' spacings.
+const RESISTIVITY_PALETTES = {
+    "primary": { name: "Primary (Green/Blue/Orange)", colors: ['#00b67a', '#0ea5e9', '#f97316', '#8b5cf6', '#ec4899', '#ef4444'] },
+    "cool": { name: "Cool Tones (Blue/Purple)", colors: ['#0077b6', '#48cae4', '#90e0ef', '#00b4d8', '#34a0a4', '#1f7a8c'] },
+    "warm": { name: "Warm Tones (Red/Yellow)", colors: ['#e76f51', '#f4a261', '#e9c46a', '#a71d31', '#d83155', '#ffb703'] },
+};
+
 
 // --- Global Setup ---
 
@@ -24,12 +42,39 @@ const customCanvasBackgroundColor = {
     }
 };
 Chart.register(customCanvasBackgroundColor);
-Chart.register(chartjs.plugin.annotation); 
+
+// SAFELY register the chart annotation plugin if it loaded via CDN
+try {
+    if (typeof chartjs !== 'undefined' && chartjs.plugin && chartjs.plugin.annotation) {
+        Chart.register(chartjs.plugin.annotation); 
+        chartAnnotationPluginLoaded = true;
+    } 
+} catch (e) {
+    // If registration fails, the flag remains false, and we avoid using annotation features.
+    console.error("Error during annotation plugin registration:", e);
+}
+
 
 // --- UI & State Control ---
 
 document.getElementById('fileInput').addEventListener('change', handleFileUpload);
 document.getElementById('themeToggle').addEventListener('click', toggleDarkMode);
+
+
+function populateThemeDropdowns() {
+    const vlfSelect = document.getElementById('vlfColorTheme');
+    const resSelect = document.getElementById('resistivityColorTheme');
+
+    // Populate VLF Themes
+    vlfSelect.innerHTML = Object.keys(VLF_THEMES).map(key => 
+        `<option value="${key}">${VLF_THEMES[key].name}</option>`
+    ).join('');
+
+    // Populate Resistivity Palettes
+    resSelect.innerHTML = Object.keys(RESISTIVITY_PALETTES).map(key => 
+        `<option value="${key}">${RESISTIVITY_PALETTES[key].name}</option>`
+    ).join('');
+}
 
 
 function setDataType(type) {
@@ -48,7 +93,8 @@ function setDataType(type) {
         infoBox.innerHTML = '<p>Paste CSV data (3 columns): <code>Station (m), InPhase (%), Quadrature (%)</code></p>';
         dataInput.placeholder = '0\t45.2\t-12.5\n10\t52.3\t-15.8\n20\t48.7\t-18.2\n...';
     } else {
-        infoBox.innerHTML = '<p>Paste data (7 columns recommended): <code>P1, P2, P3, P4, K, R, Apparent ρ</code>. <strong>Apparent ρ is calculated using $\\rho = K \\cdot R$ if column 7 is missing.</strong></p>';
+        // Use Unicode characters directly in the JS string for better cross-platform support
+        infoBox.innerHTML = '<p>Paste data (7 columns recommended): <code>P1, P2, P3, P4, K, R, Apparent \u03C1</code>. <strong>Apparent \u03C1 is calculated using \u03C1 = K \u00B7 R if column 7 is missing.</strong></p>';
         dataInput.placeholder = '0	10	20	30	62.83	8.1	508.92\n10	20	30	40	62.83	9.5	\n...';
     }
     clearAll();
@@ -278,8 +324,13 @@ function plotData() {
 
 /**
  * Utility: Creates a linear gradient across the canvas width using the selected colors.
+ * @param {CanvasRenderingContext2D} ctx - The canvas context.
+ * @param {HTMLCanvasElement} canvas - The canvas element.
+ * @param {string} startColor - Hex color for the start of the gradient (left).
+ * @param {string} endColor - Hex color for the end of the gradient (right).
  */
 function createLinearGradientForCanvas(ctx, canvas, startColor, endColor) {
+    // Horizontal gradient across the chart area
     const grad = ctx.createLinearGradient(0, 0, canvas.width, 0);
     grad.addColorStop(0, startColor);
     grad.addColorStop(1, endColor);
@@ -320,23 +371,26 @@ function plotVLFData(input) {
     const pad = range * 0.12;
     yMin -= pad; yMax += pad;
     
-    // --- Dynamic Color Implementation ---
-    const inPhaseStartColor = document.getElementById('inPhaseColor').value;
-    const quadratureStartColor = document.getElementById('quadratureColor').value;
+    // --- Dynamic Color Theme Implementation ---
+    const selectedThemeKey = document.getElementById('vlfColorTheme').value;
+    const theme = VLF_THEMES[selectedThemeKey];
     
-    // Create subtle gradient by darkening the selected color by 15%
-    const inPhaseEndColor = darkenColor(inPhaseStartColor, 15);
-    const quadratureEndColor = darkenColor(quadratureStartColor, 15);
+    const p1StartColor = theme.p1;
+    const p2StartColor = theme.p2;
+    
+    // Create subtle gradient end color by darkening the theme colors by 15%
+    const p1EndColor = darkenColor(p1StartColor, 15);
+    const p2EndColor = darkenColor(p2StartColor, 15);
 
-    const inPhaseGrad = createLinearGradientForCanvas(ctx, canvas, inPhaseStartColor, inPhaseEndColor); 
-    const quadGrad = createLinearGradientForCanvas(ctx, canvas, quadratureStartColor, quadratureEndColor); 
+    const inPhaseGrad = createLinearGradientForCanvas(ctx, canvas, p1StartColor, p1EndColor); 
+    const quadGrad = createLinearGradientForCanvas(ctx, canvas, p2StartColor, p2EndColor); 
     
     const datasets = [
         {
             label: 'In-Phase (%)',
             data: data.map(d => ({ x: d.station, y: d.inPhase })),
             borderColor: inPhaseGrad,
-            backgroundColor: 'transparent', // Use transparent for fill or dynamic RGBA if needed
+            backgroundColor: 'transparent',
             borderWidth: 3, pointRadius: 3.5, pointHoverRadius: 6, tension: 0.32,
             yAxisID: 'y1',
             pointBackgroundColor: 'white', pointBorderWidth: 2, pointBorderColor: inPhaseGrad,
@@ -355,7 +409,7 @@ function plotVLFData(input) {
     const options = getChartOptions('vlf');
     const showKH = document.getElementById('karousHjeltToggle').checked;
     
-    if (showKH) {
+    if (showKH && chartAnnotationPluginLoaded) { // Only attempt K-H if the plugin is confirmed loaded
         const khData = calculateKarousHjelt(data);
         const khPoints = khData.map(d => d.y).filter(Number.isFinite);
 
@@ -390,7 +444,7 @@ function plotVLFData(input) {
             };
             options.plugins.title.text = 'VLF Survey Profile (In-Phase, Quadrature, and K-H Filter)';
         }
-    }
+    } 
 
     // Configure primary Y-axis
     options.scales.y1 = {
@@ -411,7 +465,7 @@ function plotVLFData(input) {
 function plotResistivityData(input) {
     const data = parseResistivityData(input);
     if (data.length === 0) {
-        displayError("No valid Resistivity data found. Check your input format (P1, P2, P3, P4, K, R).");
+        displayError("No valid Resistivity data found. Expected format: P1, P2, P3, P4, K, R.");
         return;
     }
     if (chart) { chart.destroy(); chart = null; }
@@ -428,11 +482,14 @@ function plotResistivityData(input) {
         groupedData[key].push(d);
     });
     
-    // Set fixed colors for resistivity lines regardless of VLF color pickers
-    const colors = ['#00b67a', '#0ea5e9', '#f97316', '#8b5cf6', '#ec4899', '#ef4444'];
+    // --- Resistivity Color Palette Implementation ---
+    const selectedPaletteKey = document.getElementById('resistivityColorTheme').value;
+    const colorPalette = RESISTIVITY_PALETTES[selectedPaletteKey].colors;
+    
     const datasets = [];
     let colorIndex = 0;
     
+    // Sort by spacing ('a' factor)
     Object.keys(groupedData).map(Number).sort((a, b) => a - b).forEach((spacing) => {
         const points = groupedData[spacing.toFixed(2)];
         points.sort((a, b) => a.midpoint - b.midpoint); 
@@ -440,15 +497,20 @@ function plotResistivityData(input) {
         const measuredPoints = points.filter(p => !p.isCalculated).map((p) => ({ x: p.midpoint, y: p.apparentResistivity }));
         const calculatedPoints = points.filter(p => p.isCalculated).map((p) => ({ x: p.midpoint, y: p.apparentResistivity }));
 
-        const baseColor = colors[colorIndex % colors.length];
+        // Get the base color for this depth layer
+        const baseColor = colorPalette[colorIndex % colorPalette.length];
+        // Create a gradient based on the base color (darkened for the end)
+        const gradientEndColor = darkenColor(baseColor, 10);
+        const lineGradient = createLinearGradientForCanvas(ctx, canvas, baseColor, gradientEndColor);
+
 
         // 1. Measured Data (Line and Solid Points)
         datasets.push({
             label: `Depth Layer (a = ${spacing}m)`,
             data: measuredPoints,
-            borderColor: baseColor,
+            borderColor: lineGradient, // Use gradient for the line
             borderWidth: 2.5, pointRadius: 4, pointHoverRadius: 6, tension: 0.3,
-            pointBackgroundColor: baseColor, 
+            pointBackgroundColor: baseColor, // Solid point background
             pointBorderWidth: 2,
             pointBorderColor: baseColor,
             showLine: true,
@@ -459,10 +521,10 @@ function plotResistivityData(input) {
 
         // 2. Calculated Data (Hollow Squares) - Plotted separately for visual distinction
         if (calculatedPoints.length > 0) {
-             datasets.push({
+            datasets.push({
                 label: `Calculated ρ (a = ${spacing}m)`,
                 data: calculatedPoints,
-                borderColor: baseColor,
+                borderColor: baseColor, // Use solid color for calculated point border
                 borderWidth: 2, pointRadius: 5, pointHoverRadius: 7, tension: 0,
                 pointBackgroundColor: 'transparent', 
                 pointBorderWidth: 2.5,
@@ -538,13 +600,16 @@ function displayVLFStats(data) {
     const khEnabled = document.getElementById('karousHjeltToggle').checked;
     
     let khStats = '';
-    if (khEnabled) {
+    // Only try to calculate KH if the plugin loaded, otherwise skip stats related to it
+    if (khEnabled && chartAnnotationPluginLoaded) { 
         const khData = calculateKarousHjelt(data).map(d => d.y).filter(Number.isFinite);
         if (khData.length > 0) {
-             const khMin = Math.min(...khData).toFixed(2);
-             const khMax = Math.max(...khData).toFixed(2);
-             khStats = `<div class="stat-card"><h4>K-H Filter Range</h4><p>${khMin} to ${khMax}</p></div>`;
+            const khMin = Math.min(...khData).toFixed(2);
+            const khMax = Math.max(...khData).toFixed(2);
+            khStats = `<div class="stat-card"><h4>K-H Filter Range</h4><p>${khMin} to ${khMax}</p></div>`;
         }
+    } else if (khEnabled && !chartAnnotationPluginLoaded) {
+         khStats = `<div class="stat-card"><h4>K-H Filter</h4><p>Plugin failed to load</p></div>`;
     }
 
     const stats = {
@@ -632,11 +697,12 @@ function clearAll(preserveInput = false) {
 
 function loadSampleData() {
     const dataInput = document.getElementById('dataInput');
+    // Ensure default themes are selected for sample run
+    document.getElementById('vlfColorTheme').value = 'ocean';
+    document.getElementById('resistivityColorTheme').value = 'primary';
+    
     if (currentDataType === 'vlf') {
         document.getElementById('karousHjeltToggle').checked = true; 
-        // Ensure color pickers are set to default colors for sample consistency
-        document.getElementById('inPhaseColor').value = '#0ea5e9';
-        document.getElementById('quadratureColor').value = '#f97316';
         dataInput.value = `Station	InPhase	Quadrature
 0	45.2	-12.5
 10	52.3	-15.8
@@ -700,7 +766,8 @@ function downloadChart() {
     img.src = imgUrl;
 }
 
-// Initialize state
+// Initialize state: Populate dropdowns and set initial data type
 window.onload = () => {
-     setDataType('vlf');
+    populateThemeDropdowns();
+    setDataType('vlf');
 }

@@ -1,0 +1,119 @@
+<!-- Author: Oseni Ridwan, Email: olainmotion@gmail.com -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Geophysical Data Plotter (Modular)</title>
+
+    <!-- External CSS Link -->
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- External Libraries (Chart.js for plotting, PapaParse for CSV, Annotation for plugins) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@1.4.0"></script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+
+    <div class="app-container">
+        <aside class="control-panel">
+            <div class="header">
+                <h1>Geophysical Plotter</h1>
+                <p>VLF & Resistivity Visualizer</p>
+                <div class="dark-mode-toggle" id="themeToggle" title="Toggle Dark Mode">🌙</div>
+            </div>
+
+            <div class="input-section">
+                <h2>📊 Data Profile</h2>
+                <div class="data-type-selector">
+                    <button class="data-type-btn" id="btnResistivity" onclick="setDataType('resistivity')">⚡ Resistivity Survey</button>
+                    <button class="data-type-btn active" id="btnVLF" onclick="setDataType('vlf')">📡 VLF Survey</button>
+                </div>
+
+                <!-- RESISTIVITY OPTIONS -->
+                <div id="resistivityOptions" class="option-group" style="display: none;">
+                    <h3>Resistivity Array Setup</h3>
+                    <div class="select-group">
+                        <label for="arrayType">Array Type (Affects $K$ factor and Plotting Depth):</label>
+                        <select id="arrayType" onchange="clearAll(true); plotData();">
+                            <option value="wenner">Wenner Array</option>
+                            <option value="schlumberger">Schlumberger Array</option>
+                            <option value="dipole">Dipole-Dipole Array</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- VLF OPTIONS -->
+                 <div id="vlfOptions" class="option-group">
+                    <h3>VLF Visualization Tools</h3>
+                    <div class="color-options-grid">
+                        <div class="color-group">
+                            <label for="inPhaseColor">In-Phase Line Color</label>
+                            <input type="color" id="inPhaseColor" value="#0ea5e9" onchange="plotData()">
+                        </div>
+                        <div class="color-group">
+                            <label for="quadratureColor">Quadrature Line Color</label>
+                            <input type="color" id="quadratureColor" value="#f97316" onchange="plotData()">
+                        </div>
+                    </div>
+                    <div class="checkbox-container">
+                        <input type="checkbox" id="karousHjeltToggle" onchange="plotData()">
+                        <label for="karousHjeltToggle">Show Karous-Hjelt Filter (Derivative)</label>
+                    </div>
+                </div>
+
+                <h2>📝 Input Data</h2>
+                <div class="info-box" id="infoBox">
+                    <!-- Dynamic content set by setDataType() -->
+                </div>
+
+                <textarea id="dataInput" placeholder="Paste your data here..."></textarea>
+
+                <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                    <p>📁 Click to upload a CSV or TXT file</p>
+                    <input type="file" id="fileInput" accept=".csv,.txt" style="display:none;" />
+                </div>
+
+                <div class="button-grid">
+                    <button class="btn" onclick="loadSampleData()">🧪 Load Sample Data</button>
+                    <button class="btn" onclick="clearAll()">🗑️ Clear Data & Plot</button>
+                    <button class="btn btn-full" id="plotBtn" onclick="plotData()">📈 Generate Plot</button>
+                </div>
+
+                <div class="download-options">
+                    <select id="formatSelect">
+                        <option value="png">PNG</option>
+                        <option value="jpeg">JPG</option>
+                    </select>
+                    <button class="btn" id="downloadBtn" onclick="downloadChart()" disabled>📥 Download Chart</button>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            <div id="statsSection" style="display: none">
+                <div class="stats" id="statsContainer"></div>
+            </div>
+
+            <div class="chart-area" id="chartArea">
+                <div id="chartPlaceholder">
+                    <div class="icon">📊</div>
+                    <h3>Input Data to Visualize Profile</h3>
+                    <p>Select your survey type and click "Generate Plot" to begin.</p>
+                </div>
+                <canvas id="resistivityChart" style="display: none;"></canvas>
+            </div>
+        </main>
+    </div>
+
+    <!-- External JavaScript Link -->
+    <script src="script.js"></script>
+
+</body>
+</html>
+
